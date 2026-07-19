@@ -15,8 +15,14 @@ import (
 )
 
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
+	client *http.Client
+}
+
+type Auth struct {
+	// for login, logout, extend session
+	rawclient *http.Client
+
+	baseURL string
 
 	username string
 	password string
@@ -24,6 +30,15 @@ type Client struct {
 	mu        sync.Mutex
 	expiresAt time.Time
 }
+
+/*
+httpClient := &http.Client{
+    Jar: jar,
+    Transport: &AuthTransport{
+        Client: authClient,
+    },
+}
+*/
 
 func NewHttpClient() *Client {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
@@ -49,17 +64,17 @@ type Lifetime struct {
 	ExpireAt time.Time `json:"session_expiration"`
 }
 
-func (c *Client) refresh(ctx context.Context) error {
+func (a *Auth) refresh(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		c.baseURL+"/app/data/whoami",
+		a.baseURL+"/app/data/whoami",
 		nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := a.rawclient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -69,32 +84,31 @@ func (c *Client) refresh(ctx context.Context) error {
 		return fmt.Errorf("session extend failed: %s", resp.Status)
 	}
 
-	lifetime := &Lifetime{}
-	if err := json.NewDecoder(resp.Body).Decode(lifetime); err != nil {
+	var lifetime Lifetime
+	if err := json.NewDecoder(resp.Body).Decode(&lifetime); err != nil {
 		return err
 	}
 
 	fmt.Printf("%#v", lifetime)
 
-	if lifetime.LoggedIn {
-		c.expiresAt = lifetime.ExpireAt.UTC()
-
-		return nil
+	if !lifetime.LoggedIn {
+		return fmt.Errorf("session expired")
 	}
 
-	return fmt.Errorf("session expired")
+	a.expiresAt = lifetime.ExpireAt.UTC()
+	return nil
 }
 
-func (c *Client) login(ctx context.Context) error {
+func (a *Auth) login(ctx context.Context) error {
 	reqBody := strings.NewReader(fmt.Sprintf(
 		"identity=%s&password=%s",
-		c.username, c.password,
+		a.username, a.password,
 	))
 
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.baseURL+"/ajaxauth/login",
+		a.baseURL+"/ajaxauth/login",
 		reqBody)
 	if err != nil {
 		return err
@@ -102,7 +116,7 @@ func (c *Client) login(ctx context.Context) error {
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := a.rawclient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -113,29 +127,29 @@ func (c *Client) login(ctx context.Context) error {
 	}
 
 	for _, cookie := range resp.Cookies() {
-		c.expiresAt = cookie.Expires.UTC()
+		a.expiresAt = cookie.Expires.UTC()
 		fmt.Printf("%#v", cookie)
 	}
 
-	if c.expiresAt.IsZero() {
+	if a.expiresAt.IsZero() {
 		// assume cookie TTL = 2 hours
-		c.expiresAt = time.Now().Add(2 * time.Hour)
+		a.expiresAt = time.Now().UTC().Add(2 * time.Hour)
 	}
 
 	return nil
 }
 
-func (c *Client) logout(ctx context.Context) error {
+func (a *Auth) logout(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		c.baseURL+"/ajaxauth/logout",
+		a.baseURL+"/ajaxauth/logout",
 		nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := a.rawclient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -148,43 +162,43 @@ func (c *Client) logout(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) ensureAuth(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (a *Auth) ensureAuth(ctx context.Context) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	if c.expiresAt.IsZero() {
-		return c.login(ctx)
+	if a.expiresAt.IsZero() {
+		return a.login(ctx)
 	}
 
 	// okay if > 30 minutes
-	if time.Now().UTC().Before(c.expiresAt.Add(-30 * time.Minute)) {
+	if time.Now().UTC().Before(a.expiresAt.Add(-30 * time.Minute)) {
 		return nil
 	}
 
 	// refresh slightly before expiry (buffer)
-	if err := c.refresh(ctx); err == nil {
+	if err := a.refresh(ctx); err == nil {
 		return nil
 	}
 
 	// session expired
 	// login
-	return c.login(ctx)
+	return a.login(ctx)
 }
 
-func (c *Client) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
-	if err := c.ensureAuth(ctx); err != nil {
+func (a *Auth) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
+	if err := a.ensureAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	return c.httpClient.Do(req)
+	return a.httpClient.Do(req)
 }
 
-func (c *Client) DoRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
-	if err := c.ensureAuth(ctx); err != nil {
+func (a *Auth) DoRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
+	if err := a.ensureAuth(ctx); err != nil {
 		return nil, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -193,15 +207,15 @@ func (c *Client) DoRetry(ctx context.Context, req *http.Request) (*http.Response
 		resp.Body.Close()
 
 		// force re-login
-		c.mu.Lock()
-		c.expiresAt = time.Time{}
-		c.mu.Unlock()
+		a.mu.Lock()
+		a.expiresAt = time.Time{}
+		a.mu.Unlock()
 
-		if err := c.ensureAuth(ctx); err != nil {
+		if err := a.ensureAuth(ctx); err != nil {
 			return nil, err
 		}
 
-		return c.httpClient.Do(req)
+		return a.httpClient.Do(req)
 	}
 
 	return resp, nil
