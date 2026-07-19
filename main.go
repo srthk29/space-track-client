@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
-	"net/url"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -24,12 +23,6 @@ func main() {
 
 	c := NewHttpClient()
 
-	/*
-		if err := c.login(ctx); err != nil {
-			panic(err)
-		}
-	*/
-
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
@@ -44,13 +37,6 @@ func main() {
 		panic(err)
 	}
 	defer resp.Body.Close()
-
-	baseURL := "https://www.space-track.org"
-	URL, _ := url.Parse(baseURL)
-	cookies := c.client.Jar.Cookies(URL)
-	if len(cookies) > 0 {
-		fmt.Printf("%#v\n", cookies[0])
-	}
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("Non-OK Status: %s\n", resp.Status)

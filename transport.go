@@ -18,8 +18,6 @@ func (t *AuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	fmt.Printf("%+v\n", req.Cookies())
-
 	dump, _ := httputil.DumpRequestOut(req, true)
 	fmt.Printf("AuthTransport: %s\n", string(dump))
 
@@ -35,8 +33,6 @@ func (t *RateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 	if err := t.Limiter.Wait(req.Context()); err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("%+v\n", req.Cookies())
 
 	dump, _ := httputil.DumpRequestOut(req, true)
 	fmt.Printf("RateLimitTransport: %s\n", string(dump))

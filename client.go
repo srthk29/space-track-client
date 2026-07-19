@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -137,12 +136,6 @@ func (a *Auth) login(ctx context.Context) error {
 	for _, cookie := range resp.Cookies() {
 		a.expiresAt = cookie.Expires.UTC()
 		fmt.Printf("%#v\n", cookie)
-	}
-	baseURL := "https://www.space-track.org"
-	URL, _ := url.Parse(baseURL)
-	cookies := a.rawclient.Jar.Cookies(URL)
-	for i := range cookies {
-		fmt.Printf("%#v\n", cookies[i])
 	}
 
 	if a.expiresAt.IsZero() {
