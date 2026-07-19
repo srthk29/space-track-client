@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
+	"net/http/httputil"
 
 	"golang.org/x/time/rate"
 )
@@ -16,15 +18,12 @@ func (t *AuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	return t.base().RoundTrip(req)
-}
+	fmt.Printf("%+v\n", req.Cookies())
 
-func (t *AuthTransport) base() http.RoundTripper {
-	if t.Base != nil {
-		return t.Base
-	}
+	dump, _ := httputil.DumpRequestOut(req, true)
+	fmt.Printf("AuthTransport: %s\n", string(dump))
 
-	return http.DefaultTransport
+	return t.Base.RoundTrip(req)
 }
 
 type RateLimitTransport struct {
@@ -37,13 +36,10 @@ func (t *RateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 		return nil, err
 	}
 
-	return t.base().RoundTrip(req)
-}
+	fmt.Printf("%+v\n", req.Cookies())
 
-func (t *RateLimitTransport) base() http.RoundTripper {
-	if t.Base != nil {
-		return t.Base
-	}
+	dump, _ := httputil.DumpRequestOut(req, true)
+	fmt.Printf("RateLimitTransport: %s\n", string(dump))
 
-	return http.DefaultTransport
+	return t.Base.RoundTrip(req)
 }

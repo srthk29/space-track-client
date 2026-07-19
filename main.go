@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
-	"time"
 
 	"github.com/joho/godotenv"
 	"golang.org/x/net/publicsuffix"
@@ -33,34 +33,32 @@ func main() {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		"https://www.space-track.org//basicspacedata/query/class/gp/favorites/Geosynchronous/EPOCH/%3Enow-0.5/format/3le/limit/1",
+		"https://www.space-track.org/basicspacedata/query/class/gp/favorites/Geosynchronous/EPOCH/%3Enow-0.5/format/3le/limit/1",
 		nil)
 	if err != nil {
 		panic(err)
 	}
 
-	resp, err := c.Do(ctx, req)
+	resp, err := c.Do(req)
 	if err != nil {
 		panic(err)
+	}
+	defer resp.Body.Close()
+
+	baseURL := "https://www.space-track.org"
+	URL, _ := url.Parse(baseURL)
+	cookies := c.client.Jar.Cookies(URL)
+	if len(cookies) > 0 {
+		fmt.Printf("%#v\n", cookies[0])
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Non-OK Status: %s\n", resp.Status)
 	}
 
 	if _, err := io.Copy(os.Stdout, resp.Body); err != nil {
 		panic(err)
 	}
-
-	time.Sleep(30 * time.Second)
-
-	if err := c.refresh(ctx); err != nil {
-		panic(err)
-	}
-
-	if err := c.logout(ctx); err != nil {
-		panic(err)
-	}
-
-	// noCookieJar()
-
-	// withCookieJar()
 }
 
 func noCookieJar() {

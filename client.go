@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 
 type Client struct {
 	client *http.Client
+	auth   *Auth
 }
 
 type Auth struct {
@@ -31,52 +33,6 @@ type Auth struct {
 	mu        sync.Mutex
 	expiresAt time.Time
 }
-
-/*
-	jar, _ := cookiejar.New(&cookiejar.Options{
-	    PublicSuffixList: publicsuffix.List,
-	})
-
-	rawClient := &http.Client{
-	    Jar:       jar,
-	    Transport: http.DefaultTransport,
-	}
-
-	auth := &Auth{
-	    client: rawClient,
-	}
-
-// older version
-
-	httpClient := &http.Client{
-	    Jar: jar,
-	    Transport: &AuthTransport{
-	        Client: authClient,
-	    },
-	}
-
-// newer version
-
-	client := &http.Client{
-	    Jar: jar, // same jar!
-	    Transport: Chain(
-	        http.DefaultTransport,
-	        NewRateLimiter(limiter),
-	        NewAuth(auth),
-	    ),
-	}
-
-	client := &http.Client{
-	    Jar: jar,
-	    Transport: Chain(
-	        http.DefaultTransport,
-	        NewRateLimiter(limiter),
-	        NewAuth(auth),
-	        NewLogging(logger),
-	        NewRetry(),
-	    ),
-	}
-*/
 
 func NewHttpClient() *Client {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
@@ -96,9 +52,10 @@ func NewHttpClient() *Client {
 			Transport: Chain(
 				http.DefaultTransport,
 				NewRateLimiter(limiter),
-				NewAuth(auth),
+				// NewAuth(auth),
 			),
 		},
+		auth: auth,
 	}
 }
 
@@ -179,7 +136,13 @@ func (a *Auth) login(ctx context.Context) error {
 
 	for _, cookie := range resp.Cookies() {
 		a.expiresAt = cookie.Expires.UTC()
-		fmt.Printf("%#v", cookie)
+		fmt.Printf("%#v\n", cookie)
+	}
+	baseURL := "https://www.space-track.org"
+	URL, _ := url.Parse(baseURL)
+	cookies := a.rawclient.Jar.Cookies(URL)
+	for i := range cookies {
+		fmt.Printf("%#v\n", cookies[i])
 	}
 
 	if a.expiresAt.IsZero() {
@@ -236,38 +199,10 @@ func (a *Auth) ensureAuth(ctx context.Context) error {
 	return a.login(ctx)
 }
 
-func (a *Auth) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
-	if err := a.ensureAuth(ctx); err != nil {
+func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	if err := c.auth.ensureAuth(req.Context()); err != nil {
 		return nil, err
 	}
 
-	return a.httpClient.Do(req)
-}
-
-func (a *Auth) DoRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
-	if err := a.ensureAuth(ctx); err != nil {
-		return nil, err
-	}
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		resp.Body.Close()
-
-		// force re-login
-		a.mu.Lock()
-		a.expiresAt = time.Time{}
-		a.mu.Unlock()
-
-		if err := a.ensureAuth(ctx); err != nil {
-			return nil, err
-		}
-
-		return a.httpClient.Do(req)
-	}
-
-	return resp, nil
+	return c.client.Do(req)
 }
