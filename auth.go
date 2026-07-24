@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -21,6 +22,8 @@ type Auth struct {
 
 	mu        sync.Mutex
 	expiresAt time.Time
+
+	logger *slog.Logger
 }
 
 /*
@@ -61,7 +64,7 @@ func (a *Auth) refresh(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Printf("%#v", lifetime)
+	a.logger.Debug("space-track auth", "lifetime", lifetime)
 
 	if !lifetime.LoggedIn {
 		return fmt.Errorf("session expired")
@@ -100,7 +103,7 @@ func (a *Auth) login(ctx context.Context) error {
 
 	for _, cookie := range resp.Cookies() {
 		a.expiresAt = cookie.Expires.UTC()
-		fmt.Printf("%#v\n", cookie)
+		a.logger.Debug("space-track auth", "cookie", cookie)
 	}
 
 	if a.expiresAt.IsZero() {

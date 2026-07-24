@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"net/http"
 
 	"golang.org/x/time/rate"
@@ -34,6 +35,15 @@ func NewRateLimiter(l *rate.Limiter) Middleware {
 		return &RateLimitTransport{
 			Limiter: l,
 			Base:    next,
+		}
+	}
+}
+
+func NewLog(l *slog.Logger) Middleware {
+	return func(next http.RoundTripper) http.RoundTripper {
+		return &LoggingTransport{
+			Logger: l,
+			Base:   next,
 		}
 	}
 }
