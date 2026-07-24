@@ -29,7 +29,7 @@ type Auth struct {
 /*
 	{
 	  "logged_in": true,
-	  "identity": "upsidedown29@protonmail.com",
+	  "identity": "xxx@protonmail.com",
 	  "session_expiration": "2026-04-08T20:53:49+00:00"
 	}
 */

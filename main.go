@@ -9,19 +9,16 @@ import (
 	"net/http/httptest"
 	"os"
 
-	"github.com/joho/godotenv"
 	"golang.org/x/net/publicsuffix"
 )
 
 func main() {
 	ctx := context.Background()
 
-	err := godotenv.Load()
+	spacetrackclient, err := NewHttpClient()
 	if err != nil {
 		panic(err)
 	}
-
-	c := NewHttpClient()
 
 	req, err := http.NewRequestWithContext(
 		ctx,
@@ -32,7 +29,7 @@ func main() {
 		panic(err)
 	}
 
-	resp, err := c.Do(req)
+	resp, err := spacetrackclient.Do(req)
 	if err != nil {
 		panic(err)
 	}

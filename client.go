@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"golang.org/x/net/publicsuffix"
 	"golang.org/x/time/rate"
 )
@@ -17,8 +18,16 @@ type Client struct {
 	auth   *Auth
 }
 
-func NewHttpClient() *Client {
-	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+func NewHttpClient() (*Client, error) {
+	if err := godotenv.Load(); err != nil {
+		return nil, err
+	}
+
+	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		return nil, err
+	}
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true, Level: getLogLevelEnv().Slog()}))
 
 	auth := &Auth{
@@ -29,7 +38,7 @@ func NewHttpClient() *Client {
 		logger:    logger,
 	}
 
-	limiter := rate.NewLimiter(rate.Every(time.Minute/2), 1)
+	limiter := rate.NewLimiter(rate.Every(time.Minute/5), 1)
 
 	return &Client{
 		client: &http.Client{
@@ -42,7 +51,7 @@ func NewHttpClient() *Client {
 			),
 		},
 		auth: auth,
-	}
+	}, nil
 }
 
 func (c *Client) Do(req *http.Request) (*http.Response, error) {

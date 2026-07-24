@@ -1,4 +1,4 @@
-module github.com/srthk29/httpcookiejar
+module github.com/srthk29/space-track-client
 
 go 1.25.4
 
